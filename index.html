@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบแผนที่เลือกแปลงที่ดิน (Interactive Land Map Selector)</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Prompt -->
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Prompt', sans-serif;
+        }
+        canvas {
+            touch-action: none;
+        }
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #6b7280;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex flex-col font-sans antialiased overflow-hidden">
+
+    <!-- Header / Navbar -->
+    <header class="bg-gray-800 border-b border-gray-700 px-4 py-3 flex flex-wrap justify-between items-center shadow-md z-10">
+        <div class="flex items-center space-x-3">
+            <div class="bg-indigo-600 p-2 rounded-lg text-white">
+                <i class="fa-solid fa-map-location-dot text-xl"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg text-white leading-tight">ระบบแผนที่เลือกแปลงที่ดิน & พื้นที่ย่อย</h1>
+                <p class="text-xs text-gray-400">Interactive Land Parcel Mapping & Status Management System</p>
+            </div>
+        </div>
+
+        <!-- Quick Stats & Tools -->
+        <div class="flex items-center space-x-2 mt-2 sm:mt-0 text-sm">
+            <div class="bg-gray-700 px-3 py-1.5 rounded-lg flex items-center space-x-2 border border-gray-600">
+                <span class="text-gray-400 text-xs">ทั้งหมด:</span>
+                <span id="stat-total" class="font-bold text-white">0</span>
+            </div>
+            <div class="bg-emerald-950/60 border border-emerald-500/40 px-3 py-1.5 rounded-lg flex items-center space-x-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                <span class="text-emerald-300 text-xs">ว่าง:</span>
+                <span id="stat-available" class="font-bold text-emerald-400">0</span>
+            </div>
+            <div class="bg-amber-950/60 border border-amber-500/40 px-3 py-1.5 rounded-lg flex items-center space-x-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                <span class="text-amber-300 text-xs">จองแล้ว:</span>
+                <span id="stat-reserved" class="font-bold text-amber-400">0</span>
+            </div>
+            <div class="bg-rose-950/60 border border-rose-500/40 px-3 py-1.5 rounded-lg flex items-center space-x-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                <span class="text-rose-300 text-xs">ขายแล้ว:</span>
+                <span id="stat-sold" class="font-bold text-rose-400">0</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+
+        <!-- Toolbar Left / Sidebar Controls -->
+        <aside class="w-full md:w-80 bg-gray-800 border-r border-gray-700 p-4 flex flex-col justify-between overflow-y-auto space-y-4 z-10">
+            <div class="space-y-4">
+                
+                <!-- Action Modes -->
+                <div>
+                    <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider block mb-2">โหมดการใช้งาน</label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="btn-mode-select" onclick="setToolMode('select')" class="flex items-center justify-center space-x-2 p-2.5 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-500 transition border border-indigo-400/30 shadow">
+                            <i class="fa-solid fa-hand-pointer"></i>
+                            <span>คลิกเลือกแปลง</span>
+                        </button>
+                        <button id="btn-mode-draw" onclick="setToolMode('draw')" class="flex items-center justify-center space-x-2 p-2.5 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white transition border border-gray-600">
+                            <i class="fa-solid fa-draw-polygon"></i>
+                            <span>วาดแปลงใหม่</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Custom Map Image Uploader -->
+                <div class="bg-gray-900/60 p-3 rounded-xl border border-gray-700">
+                    <label class="text-xs font-semibold text-gray-300 block mb-1">
+                        <i class="fa-solid fa-image text-indigo-400 mr-1"></i>เปลี่ยนภาพแผนที่ของคุณ
+                    </label>
+                    <input type="file" id="image-loader" accept="image/*" class="block w-full text-xs text-gray-400 file:mr-2 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer"/>
+                    <p class="text-[10px] text-gray-400 mt-1">*สามารถใช้ไฟล์ภาพผังแนวเขตสีแดงของคุณได้</p>
+                </div>
+
+                <!-- Land Quick Actions & Generators -->
+                <div class="space-y-2">
+                    <label class="text-xs font-semibold text-gray-400 uppercase tracking-wider block">เครื่องมือช่วยจัดการ</label>
+                    
+                    <button onclick="generateSampleGrid()" class="w-full flex items-center justify-center space-x-2 py-2 px-3 bg-gray-700 hover:bg-gray-600 text-xs font-medium text-gray-200 rounded-lg transition border border-gray-600">
+                        <i class="fa-solid fa-th text-amber-400"></i>
+                        <span>สร้างแปลงตัวอย่างอัตโนมัติ (Grid)</span>
+                    </button>
+
+                    <button onclick="clearAllPolygons()" class="w-full flex items-center justify-center space-x-2 py-2 px-3 bg-red-950/40 hover:bg-red-900/60 text-xs font-medium text-red-300 rounded-lg transition border border-red-800/50">
+                        <i class="fa-solid fa-trash-can text-red-400"></i>
+                        <span>ลบแปลงทั้งหมด</span>
+                    </button>
+                </div>
+
+                <!-- Status Color Legend / Settings -->
+                <div class="bg-gray-900/60 p-3 rounded-xl border border-gray-700 space-y-2">
+                    <label class="text-xs font-semibold text-gray-300 block mb-1">
+                        <i class="fa-solid fa-palette text-indigo-400 mr-1"></i>คลิกเปลี่ยนสถานะแปลงเมื่ออยู่ในโหมดเลือก
+                    </label>
+                    <div class="space-y-1.5 text-xs">
+                        <div class="flex items-center justify-between p-2 rounded bg-gray-800 border border-emerald-900">
+                            <span class="flex items-center"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block mr-2"></span>ว่าง (Available)</span>
+                            <span class="text-gray-400 text-[10px]">สีเขียว</span>
+                        </div>
+                        <div class="flex items-center justify-between p-2 rounded bg-gray-800 border border-amber-900">
+                            <span class="flex items-center"><span class="w-3 h-3 rounded-full bg-amber-500 inline-block mr-2"></span>จองแล้ว (Reserved)</span>
+                            <span class="text-gray-400 text-[10px]">สีส้ม</span>
+                        </div>
+                        <div class="flex items-center justify-between p-2 rounded bg-gray-800 border border-rose-900">
+                            <span class="flex items-center"><span class="w-3 h-3 rounded-full bg-rose-500 inline-block mr-2"></span>ขายแล้ว (Sold)</span>
+                            <span class="text-gray-400 text-[10px]">สีแดง</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active Plot Info Panel -->
+                <div id="plot-info-panel" class="bg-indigo-950/30 border border-indigo-800/50 rounded-xl p-3 text-xs hidden">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="font-bold text-indigo-300 text-sm" id="info-plot-id">แปลงที่: #</span>
+                        <button onclick="deselectPlot()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="space-y-2">
+                        <div>
+                            <label class="text-gray-400 block mb-1">ชื่อแปลง / รหัส:</label>
+                            <input type="text" id="info-plot-name" class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white focus:outline-none focus:border-indigo-500" placeholder="เช่น แปลง A-101">
+                        </div>
+                        <div>
+                            <label class="text-gray-400 block mb-1">สถานะแปลง:</label>
+                            <select id="info-plot-status" onchange="updateSelectedPlotStatus(this.value)" class="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white focus:outline-none focus:border-indigo-500">
+                                <option value="available">ว่าง (Available)</option>
+                                <option value="reserved">จองแล้ว (Reserved)</option>
+                                <option value="sold">ขายแล้ว (Sold)</option>
+                            </select>
+                        </div>
+                        <div class="flex space-x-2 pt-1">
+                            <button onclick="savePlotDetails()" class="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white py-1 px-2 rounded font-medium transition">
+                                <i class="fa-solid fa-floppy-disk mr-1"></i>บันทึก
+                            </button>
+                            <button onclick="deleteSelectedPlot()" class="bg-rose-900/60 hover:bg-rose-800 text-rose-200 py-1 px-2 rounded font-medium transition border border-rose-700">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Export / Import & Save Buttons -->
+            <div class="pt-4 border-t border-gray-700 space-y-2">
+                <button onclick="exportData()" class="w-full bg-gray-700 hover:bg-gray-600 text-gray-200 py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center space-x-2 border border-gray-600 transition">
+                    <i class="fa-solid fa-download text-indigo-400"></i>
+                    <span>ส่งออกข้อมูลแปลง (Export Data JSON)</span>
+                </button>
+                <button onclick="document.getElementById('import-file').click()" class="w-full bg-gray-800 hover:bg-gray-750 text-gray-300 py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center space-x-2 border border-gray-700 transition">
+                    <i class="fa-solid fa-upload text-indigo-400"></i>
+                    <span>นำเข้าข้อมูลแปลง (Import JSON)</span>
+                </button>
+                <input type="file" id="import-file" accept=".json" class="hidden" onchange="importData(event)">
+            </div>
+        </aside>
+
+        <!-- Map Workspace (Canvas Viewport) -->
+        <main class="flex-1 relative bg-gray-950 flex items-center justify-center overflow-hidden">
+            
+            <!-- Floating Zoom & Controls Overlay -->
+            <div class="absolute top-4 right-4 z-20 flex flex-col space-y-2 bg-gray-800/80 backdrop-blur-md p-1.5 rounded-xl border border-gray-700 shadow-xl">
+                <button onclick="zoomIn()" title="ซูมเข้า" class="w-9 h-9 flex items-center justify-center bg-gray-700/70 hover:bg-indigo-600 text-white rounded-lg transition">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+                <button onclick="resetZoom()" title="รีเซ็ตมุมมอง" class="w-9 h-9 flex items-center justify-center bg-gray-700/70 hover:bg-indigo-600 text-white rounded-lg transition text-xs font-semibold">
+                    1:1
+                </button>
+                <button onclick="zoomOut()" title="ซูมออก" class="w-9 h-9 flex items-center justify-center bg-gray-700/70 hover:bg-indigo-600 text-white rounded-lg transition">
+                    <i class="fa-solid fa-minus"></i>
+                </button>
+            </div>
+
+            <!-- Interactive Drawing Guide Banner -->
+            <div id="drawing-guide" class="absolute top-4 left-4 z-20 bg-indigo-900/90 backdrop-blur border border-indigo-500 text-indigo-100 px-4 py-2 rounded-xl shadow-lg text-xs flex items-center space-x-3 hidden">
+                <i class="fa-solid fa-pen-ruler text-indigo-300 text-base"></i>
+                <div>
+                    <span class="font-bold">โหมดวาดแปลงใหม่:</span> คลิกปักจุดรอบกรอบแดงเพื่อวาดรูปปิด (อย่างน้อย 3 จุด) 
+                    <span class="text-indigo-300 ml-1 font-semibold">[ดับเบิ้ลคลิก หรือ กด Esc เพื่อวาดเสร็จ]</span>
+                </div>
+                <button onclick="cancelDrawing()" class="bg-indigo-950 hover:bg-indigo-800 text-white px-2 py-1 rounded ml-2 border border-indigo-700">ยกเลิก</button>
+            </div>
+
+            <!-- Toast / Notification Banner -->
+            <div id="toast-msg" class="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-30 bg-gray-800 text-white border border-gray-700 px-4 py-2 rounded-xl shadow-2xl text-sm flex items-center space-x-2 transition-opacity duration-300 opacity-0 pointer-events-none">
+                <i id="toast-icon" class="fa-solid fa-circle-info text-indigo-400"></i>
+                <span id="toast-text">แจ้งเตือน</span>
+            </div>
+
+            <!-- Canvas Container -->
+            <canvas id="mapCanvas" class="cursor-grab active:cursor-grabbing border border-gray-800 shadow-2xl"></canvas>
+        </main>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // App State
+        const canvas = document.getElementById('mapCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let toolMode = 'select'; // 'select' | 'draw'
+        let mapImage = new Image();
+        let mapLoaded = false;
+
+        // View Transform (Pan & Zoom)
+        let scale = 1;
+        let panX = 0;
+        let panY = 0;
+        let isDragging = false;
+        let startPanX = 0;
+        let startPanY = 0;
+
+        // Data Models
+        let polygons = []; // Array of { id, name, points: [{x, y}], status: 'available'|'reserved'|'sold' }
+        let selectedPolygonId = null;
+        let activeDrawPoints = []; // Array of {x, y} for drawing mode
+
+        // Status Colors Configuration
+        const statusColors = {
+            available: { fill: 'rgba(16, 185, 129, 0.45)', stroke: '#10b981', label: 'ว่าง' },
+            reserved:  { fill: 'rgba(245, 158, 11, 0.55)', stroke: '#f59e0b', label: 'จองแล้ว' },
+            sold:      { fill: 'rgba(244, 63, 94, 0.55)',  stroke: '#f43f5e', label: 'ขายแล้ว' }
+        };
+
+        // Default Base Map Image (Layout image uploaded by user)
+        const DEFAULT_MAP_URL = 'Layout.jpg';
+
+        window.onload = function () {
+            initCanvasSize();
+            loadDefaultImage();
+
+            // Keyboard Shortcuts
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    if (toolMode === 'draw') {
+                        cancelDrawing();
+                    } else {
+                        deselectPlot();
+                    }
+                }
+            });
+
+            // Window Resize Handler
+            window.addEventListener('resize', () => {
+                initCanvasSize();
+                render();
+            });
+        };
+
+        // Initialize Canvas Fit to Screen
+        function initCanvasSize() {
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+        }
+
+        // Load Default Map Image
+        function loadDefaultImage() {
+            mapImage.src = DEFAULT_MAP_URL;
+            mapImage.onload = function () {
+                mapLoaded = true;
+                resetZoom();
+                render();
+                showToast('โหลดแผนที่สำเร็จแล้ว สามารถคลิกเลือกหรือวาดพื้นที่ได้เลยครับ', 'success');
+            };
+            mapImage.onerror = function () {
+                // Fallback to placeholder canvas background if image path fails
+                console.warn('Map image not found directly, initializing dark map canvas grid.');
+                createPlaceholderMap();
+            };
+        }
+
+        function createPlaceholderMap() {
+            // Generate synthetic canvas if image isn't loaded
+            mapLoaded = true;
+            resetZoom();
+            render();
+            showToast('แสดงแผนที่จำลอง กรุณาเลือกไฟล์ภาพแผนที่ของคุณจากเมนูด้านซ้าย', 'info');
+        }
+
+        // Handle Image File Upload
+        document.getElementById('image-loader').addEventListener('change', function (e) {
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                mapImage = new Image();
+                mapImage.onload = function () {
+                    mapLoaded = true;
+                    resetZoom();
+                    render();
+                    showToast('เปลี่ยนภาพแผนที่เรียบร้อย', 'success');
+                };
+                mapImage.src = event.target.result;
+            };
+            if (e.target.files[0]) {
+                reader.readAsDataURL(e.target.files[0]);
+            }
+        });
+
+        // Set Active Tool Mode
+        function setToolMode(mode) {
+            toolMode = mode;
+            const btnSelect = document.getElementById('btn-mode-select');
+            const btnDraw = document.getElementById('btn-mode-draw');
+            const drawGuide = document.getElementById('drawing-guide');
+
+            if (mode === 'select') {
+                btnSelect.className = "flex items-center justify-center space-x-2 p-2.5 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-500 transition border border-indigo-400/30 shadow";
+                btnDraw.className = "flex items-center justify-center space-x-2 p-2.5 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white transition border border-gray-600";
+                drawGuide.classList.add('hidden');
+                activeDrawPoints = [];
+                canvas.style.cursor = 'grab';
+            } else {
+                btnDraw.className = "flex items-center justify-center space-x-2 p-2.5 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-500 transition border border-indigo-400/30 shadow";
+                btnSelect.className = "flex items-center justify-center space-x-2 p-2.5 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white transition border border-gray-600";
+                drawGuide.classList.remove('hidden');
+                canvas.style.cursor = 'crosshair';
+                deselectPlot();
+            }
+            render();
+        }
+
+        // Reset Zoom & Center Image
+        function resetZoom() {
+            if (!mapLoaded || !mapImage.width) {
+                scale = 1;
+                panX = 0;
+                panY = 0;
+                return;
+            }
+            const scaleX = canvas.width / mapImage.width;
+            const scaleY = canvas.height / mapImage.height;
+            scale = Math.min(scaleX, scaleY) * 0.9;
+            panX = (canvas.width - mapImage.width * scale) / 2;
+            panY = (canvas.height - mapImage.height * scale) / 2;
+            render();
+        }
+
+        function zoomIn() {
+            scale *= 1.25;
+            render();
+        }
+
+        function zoomOut() {
+            scale /= 1.25;
+            render();
+        }
+
+        // Render Loop
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(panX, panY);
+            ctx.scale(scale, scale);
+
+            // 1. Draw Map Image
+            if (mapLoaded && mapImage.width) {
+                ctx.drawImage(mapImage, 0, 0);
+            } else {
+                // Fallback Background Grid
+                ctx.fillStyle = "#1e293b";
+                ctx.fillRect(0, 0, 1000, 1000);
+                ctx.strokeStyle = "#334155";
+                ctx.lineWidth = 2;
+                for (let x = 0; x < 1000; x += 50) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, 1000);
+                    ctx.stroke();
+                }
+                for (let y = 0; y < 1000; y += 50) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(1000, y);
+                    ctx.stroke();
+                }
+            }
+
+            // 2. Draw Saved Polygons (Plots)
+            polygons.forEach((poly) => {
+                if (!poly.points || poly.points.length < 3) return;
+
+                const isSelected = poly.id === selectedPolygonId;
+                const statusConfig = statusColors[poly.status] || statusColors.available;
+
+                ctx.beginPath();
+                ctx.moveTo(poly.points[0].x, poly.points[0].y);
+                for (let i = 1; i < poly.points.length; i++) {
+                    ctx.lineTo(poly.points[i].x, poly.points[i].y);
+                }
+                ctx.closePath();
+
+                // Fill color
+                ctx.fillStyle = isSelected ? 'rgba(99, 102, 241, 0.65)' : statusConfig.fill;
+                ctx.fill();
+
+                // Stroke outline
+                ctx.strokeStyle = isSelected ? '#ffffff' : statusConfig.stroke;
+                ctx.lineWidth = isSelected ? 3 / scale : 1.8 / scale;
+                ctx.stroke();
+
+                // Plot Name / Label Center Calculation
+                const center = getPolygonCenter(poly.points);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = `bold ${Math.max(10, 12 / scale)}px Prompt, sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                // Text background bubble for readability
+                const labelText = poly.name || `#${poly.id.toString().slice(-4)}`;
+                const textWidth = ctx.measureText(labelText).width;
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                ctx.fillRect(
+                    center.x - textWidth / 2 - 4 / scale,
+                    center.y - (8 / scale),
+                    textWidth + 8 / scale,
+                    16 / scale
+                );
+
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText(labelText, center.x, center.y);
+            });
+
+            // 3. Draw Active Drawing Polygon
+            if (toolMode === 'draw' && activeDrawPoints.length > 0) {
+                ctx.beginPath();
+                ctx.moveTo(activeDrawPoints[0].x, activeDrawPoints[0].y);
+                for (let i = 1; i < activeDrawPoints.length; i++) {
+                    ctx.lineTo(activeDrawPoints[i].x, activeDrawPoints[i].y);
+                }
+                ctx.strokeStyle = '#6366f1';
+                ctx.lineWidth = 2 / scale;
+                ctx.stroke();
+
+                // Draw Vertex Points
+                activeDrawPoints.forEach((pt) => {
+                    ctx.beginPath();
+                    ctx.arc(pt.x, pt.y, 4 / scale, 0, Math.PI * 2);
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fill();
+                    ctx.strokeStyle = '#4338ca';
+                    ctx.lineWidth = 2 / scale;
+                    ctx.stroke();
+                });
+            }
+
+            ctx.restore();
+
+            updateStats();
+        }
+
+        // Coordinate Transformation: Screen Screen Space to Map Space
+        function getMapCoords(e) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            return {
+                x: (mouseX - panX) / scale,
+                y: (mouseY - panY) / scale
+            };
+        }
+
+        // Canvas Mouse / Touch Events
+        let isMouseDown = false;
+        let mouseDownPos = { x: 0, y: 0 };
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (e.button === 2) return; // Ignore right click
+            isMouseDown = true;
+            mouseDownPos = { x: e.clientX, y: e.clientY };
+            startPanX = e.clientX - panX;
+            startPanY = e.clientY - panY;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isMouseDown) return;
+            const dist = Math.hypot(e.clientX - mouseDownPos.x, e.clientY - mouseDownPos.y);
+            if (dist > 5) {
+                isDragging = true;
+                panX = e.clientX - startPanX;
+                panY = e.clientY - startPanY;
+                render();
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (!isDragging) {
+                handleCanvasClick(e);
+            }
+            isMouseDown = false;
+            isDragging = false;
+        });
+
+        // Double Click Handler for completing drawing
+        canvas.addEventListener('dblclick', (e) => {
+            if (toolMode === 'draw' && activeDrawPoints.length >= 3) {
+                completePolygonDrawing();
+            }
+        });
+
+        // Wheel Zoom Handler
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomFactor = e.deltaY < 0 ? 1.15 : 0.85;
+            
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            panX = mouseX - (mouseX - panX) * zoomFactor;
+            panY = mouseY - (mouseY - panY) * zoomFactor;
+            scale *= zoomFactor;
+
+            render();
+        }, { passive: false });
+
+        // Click Handling Logic
+        function handleCanvasClick(e) {
+            const coords = getMapCoords(e);
+
+            if (toolMode === 'draw') {
+                // Add Point to current polygon
+                activeDrawPoints.push(coords);
+                render();
+            } else if (toolMode === 'select') {
+                // Test Point in Polygon (Hit testing)
+                let clickedPoly = null;
+                for (let i = polygons.length - 1; i >= 0; i--) {
+                    if (isPointInPolygon(coords, polygons[i].points)) {
+                        clickedPoly = polygons[i];
+                        break;
+                    }
+                }
+
+                if (clickedPoly) {
+                    selectPlot(clickedPoly);
+                    // Cycle Status on click: available -> reserved -> sold -> available
+                    cyclePlotStatus(clickedPoly.id);
+                } else {
+                    deselectPlot();
+                }
+            }
+        }
+
+        // Cycle Status Easily via Click
+        function cyclePlotStatus(polyId) {
+            const poly = polygons.find(p => p.id === polyId);
+            if (!poly) return;
+
+            const statusOrder = ['available', 'reserved', 'sold'];
+            const currentIndex = statusOrder.indexOf(poly.status);
+            const nextStatus = statusOrder[(currentIndex + 1) % statusOrder.length];
+            
+            poly.status = nextStatus;
+            
+            document.getElementById('info-plot-status').value = nextStatus;
+            render();
+            showToast(`เปลี่ยนสถานะแปลง ${poly.name} เป็น: ${statusColors[nextStatus].label}`, 'info');
+        }
+
+        // Select & Edit Plot Details
+        function selectPlot(poly) {
+            selectedPolygonId = poly.id;
+            const panel = document.getElementById('plot-info-panel');
+            panel.classList.remove('hidden');
+
+            document.getElementById('info-plot-id').innerText = `แปลง: ${poly.name || '#' + poly.id}`;
+            document.getElementById('info-plot-name').value = poly.name || '';
+            document.getElementById('info-plot-status').value = poly.status;
+
+            render();
+        }
+
+        function deselectPlot() {
+            selectedPolygonId = null;
+            document.getElementById('plot-info-panel').classList.add('hidden');
+            render();
+        }
+
+        function updateSelectedPlotStatus(newStatus) {
+            if (!selectedPolygonId) return;
+            const poly = polygons.find(p => p.id === selectedPolygonId);
+            if (poly) {
+                poly.status = newStatus;
+                render();
+            }
+        }
+
+        function savePlotDetails() {
+            if (!selectedPolygonId) return;
+            const poly = polygons.find(p => p.id === selectedPolygonId);
+            if (poly) {
+                poly.name = document.getElementById('info-plot-name').value || `แปลง #${poly.id}`;
+                poly.status = document.getElementById('info-plot-status').value;
+                render();
+                showToast('บันทึกข้อมูลแปลงสำเร็จ', 'success');
+            }
+        }
+
+        function deleteSelectedPlot() {
+            if (!selectedPolygonId) return;
+            polygons = polygons.filter(p => p.id !== selectedPolygonId);
+            deselectPlot();
+            render();
+            showToast('ลบแปลงที่ดินเรียบร้อยแล้ว', 'info');
+        }
+
+        // Complete Polygon Drawing Mode
+        function completePolygonDrawing() {
+            if (activeDrawPoints.length < 3) {
+                showToast('กรุณาคลิกอย่างน้อย 3 จุดเพื่อสร้างแปลง', 'warning');
+                return;
+            }
+
+            const newId = Date.now();
+            const newPlot = {
+                id: newId,
+                name: `แปลง P-${polygons.length + 1}`,
+                points: [...activeDrawPoints],
+                status: 'available'
+            };
+
+            polygons.push(newPlot);
+            activeDrawPoints = [];
+            render();
+            selectPlot(newPlot);
+            showToast(`วาดแปลงใหม่ ${newPlot.name} สำเร็จ!`, 'success');
+        }
+
+        function cancelDrawing() {
+            activeDrawPoints = [];
+            setToolMode('select');
+            render();
+        }
+
+        // Clear All Polygons
+        function clearAllPolygons() {
+            if (confirm('คุณแน่ใจหรือไม่ว่าต้องการลบแปลงทั้งหมด?')) {
+                polygons = [];
+                deselectPlot();
+                render();
+                showToast('ลบแปลงทั้งหมดแล้ว', 'info');
+            }
+        }
+
+        // Ray-Casting Algorithm for Point in Polygon Test
+        function isPointInPolygon(point, vs) {
+            let x = point.x, y = point.y;
+            let inside = false;
+            for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
+                let xi = vs[i].x, yi = vs[i].y;
+                let xj = vs[j].x, yj = vs[j].y;
+                let intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        }
+
+        // Polygon Centroid Calculation for Labels
+        function getPolygonCenter(points) {
+            let xSum = 0, ySum = 0;
+            points.forEach(p => {
+                xSum += p.x;
+                ySum += p.y;
+            });
+            return {
+                x: xSum / points.length,
+                y: ySum / points.length
+            };
+        }
+
+        // Update Stats Counters
+        function updateStats() {
+            const total = polygons.length;
+            const available = polygons.filter(p => p.status === 'available').length;
+            const reserved = polygons.filter(p => p.status === 'reserved').length;
+            const sold = polygons.filter(p => p.status === 'sold').length;
+
+            document.getElementById('stat-total').innerText = total;
+            document.getElementById('stat-available').innerText = available;
+            document.getElementById('stat-reserved').innerText = reserved;
+            document.getElementById('stat-sold').innerText = sold;
+        }
+
+        // Export Data JSON
+        function exportData() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(polygons, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `land_map_data_${new Date().toISOString().slice(0, 10)}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+            showToast('ส่งออกไฟล์ข้อมูลเรียบร้อยแล้ว', 'success');
+        }
+
+        // Import Data JSON
+        function importData(event) {
+            const fileReader = new FileReader();
+            fileReader.onload = function (e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (Array.isArray(imported)) {
+                        polygons = imported;
+                        deselectPlot();
+                        render();
+                        showToast(`นำเข้าข้อมูลสำเร็จ ${polygons.length} แปลง`, 'success');
+                    }
+                } catch (err) {
+                    showToast('รูปแบบไฟล์ JSON ไม่ถูกต้อง', 'warning');
+                }
+            };
+            if (event.target.files[0]) {
+                fileReader.readAsText(event.target.files[0]);
+            }
+        }
+
+        // Helper: Generate Sample Grid Plots across Red Lines Map area
+        function generateSampleGrid() {
+            const baseWidth = mapImage.width || 800;
+            const baseHeight = mapImage.height || 600;
+
+            const cols = 6;
+            const rows = 5;
+            const cellW = (baseWidth * 0.5) / cols;
+            const cellH = (baseHeight * 0.4) / rows;
+            const startX = baseWidth * 0.25;
+            const startY = baseHeight * 0.25;
+
+            polygons = [];
+            let count = 1;
+
+            const statuses = ['available', 'reserved', 'sold'];
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const x = startX + c * (cellW + 10);
+                    const y = startY + r * (cellH + 10);
+                    
+                    const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
+
+                    polygons.push({
+                        id: Date.now() + count,
+                        name: `A-${count}`,
+                        status: randomStatus,
+                        points: [
+                            { x: x, y: y },
+                            { x: x + cellW, y: y },
+                            { x: x + cellW, y: y + cellH },
+                            { x: x, y: y + cellH }
+                        ]
+                    });
+                    count++;
+                }
+            }
+
+            render();
+            showToast('สร้างแปลงตัวอย่างจำลองบนแผนที่เรียบร้อยครับ', 'success');
+        }
+
+        // Notification Toast System
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast-msg');
+            const toastText = document.getElementById('toast-text');
+            const toastIcon = document.getElementById('toast-icon');
+
+            toastText.innerText = message;
+
+            if (type === 'success') {
+                toastIcon.className = "fa-solid fa-circle-check text-emerald-400";
+            } else if (type === 'warning') {
+                toastIcon.className = "fa-solid fa-triangle-exclamation text-amber-400";
+            } else {
+                toastIcon.className = "fa-solid fa-circle-info text-indigo-400";
+            }
+
+            toast.classList.remove('opacity-0', 'pointer-events-none');
+            toast.classList.add('opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-100');
+                toast.classList.add('opacity-0', 'pointer-events-none');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
